@@ -214,11 +214,15 @@ class freeHoloPlayCoreAPI:
     # TODO: How do we differentiate between multiple connected LKGs?
     #       Might be rare case, but still should be implemented!
     def get_device_hdmi_name(self):
-        # on macOS: system_profiler SPDisplaysDataType -json delivers Display Info
-        # on macOS: system_profiler SPUSBDataType -json delivers USB device info
+
+        # set default output
+        returnName = b'LKG00PxDUMMY'
 
 		# if on macOS
         if platform.system() == "Darwin":
+
+            # on macOS: system_profiler SPDisplaysDataType -json delivers Display Info
+            # on macOS: system_profiler SPUSBDataType -json delivers USB device info
 
             # use the 'system_profiler' terminal command to obtain basic display infos
             info = subprocess.check_output(['system_profiler', 'SPDisplaysDataType', '-json'])
@@ -228,12 +232,8 @@ class freeHoloPlayCoreAPI:
             for display in info['SPDisplaysDataType'][0]['spdisplays_ndrvs']:
                 # until we find a Looking Glass
                 if 'LKG' == display['_name'][:3]:
+                    returnName = display['_name']
                     break
-            else:
-                display['_name'] = 'LKG79PxDUMMY'
-
-            # return the name
-            return display['_name']
 
         # if on Windows
         elif platform.system() == "Windows":
@@ -265,7 +265,6 @@ class freeHoloPlayCoreAPI:
 
             # index and output variable
             i = 0
-            returnName = b'LKG79PxDUMMY'
 
             # iterate through all display devices
             while user32.EnumDisplayDevicesA(None, i, ctypes.pointer(display_device),0):
@@ -279,11 +278,18 @@ class freeHoloPlayCoreAPI:
                     returnName = display_device.DeviceString
                     break
 
-            return returnName.decode('ascii')
 
+        # TODO: Implement on Linux. Using 'xdotool', maybe?
+        # if on Linux
         elif platform.system() == "Linux":
 
-            return 'LKG79PxDUMMY'
+            # use the 'xdotool' terminal command to obtain basic display infos
+            raise OSError('Not supported yet.')
+            #info = subprocess.check_output(['xdotool', '???'])
+
+
+        # return the obtained name
+        return returnName.decode('ascii')
 
     # TODO: Maybe using the resolution is not future proof, but don't know how
     #       to infer it otherwise. May be improved later, if required.
@@ -306,6 +312,122 @@ class freeHoloPlayCoreAPI:
 		# if 7.9'' Looking Glass Portrait
         elif width == 1536 and height == 2048:
             return 'portrait'
+
+
+
+    # just a helper function for the screen positions on Windows
+    def get_monitor_name(self, name):
+
+        # load user32.dll, which contains all the functions to obtain
+        # display informations
+        user32 = ctypes.WinDLL('user32', use_last_error=True)
+        class DISPLAY_DEVICE(ctypes.Structure):
+        	_fields_ = [
+        		("cb", ctypes.wintypes.DWORD),
+        		("DeviceName", ctypes.wintypes.CHAR*32),
+        		("DeviceString", ctypes.wintypes.CHAR*128),
+        		("StateFlags", ctypes.wintypes.DWORD),
+        		("DeviceID", ctypes.wintypes.CHAR*128),
+        		("DeviceKey", ctypes.wintypes.CHAR*128)
+        	]
+        device_name = DISPLAY_DEVICE()
+        device_name.cb = ctypes.sizeof(device_name)
+        index = 0
+        user32.EnumDisplayDevicesA(None, index, ctypes.pointer(device_name),0)
+        user32.EnumDisplayDevicesA(name.encode(), 0, ctypes.pointer(device_name), 0)
+        return device_name.DeviceString
+
+    # TODO: Maybe using the resolution is not future proof, but don't know how
+    #       to infer it otherwise. May be improved later, if required.
+    def get_device_screen_position(self, name):
+
+        # set default output
+        global x, y
+        x, y = (None, None)
+
+		# if on macOS
+        if platform.system() == "Darwin":
+
+            # TODO: The following is only a placeholder.
+            #       Find a way to obtain the position!
+
+            # use the 'system_profiler' terminal command to obtain basic display infos
+            info = subprocess.check_output(['system_profiler', 'SPDisplaysDataType', '-json'])
+            info = json.loads(info.decode('ascii'))
+
+            # go through all displays
+            for display in info['SPDisplaysDataType'][0]['spdisplays_ndrvs']:
+                # until we find a Looking Glass
+                if display['_name'] == name:
+                    # TODO: Are there keys that return the position?
+                    x = int(display['_spdisplays_resolution'].split(" x ")[0])
+                    y = int(display['_spdisplays_resolution'].split(" x ")[1])
+                    break
+
+
+
+        # if on Windows
+        elif platform.system() == "Windows":
+
+            # The following is taken from:
+            # https://github.com/glitchassassin/lackey/blob/7adadfacd7f45d81186710be992f5668b15399fe/lackey/PlatformManagerWindows.py/
+            # LICENSE: (MIT License)
+            from ctypes import wintypes
+
+            # load user32.dll, which contains all the functions to obtain
+            # display informations
+            user32 = ctypes.WinDLL('user32', use_last_error=True)
+
+            # this is for the monitor name
+            CCHDEVICENAME = 32
+            def _MonitorEnumProcCallback(hMonitor, hdcMonitor, lprcMonitor, dwData):
+                global x, y
+                class MONITORINFOEX(ctypes.Structure):
+                    _fields_ = [("cbSize", ctypes.wintypes.DWORD),
+                                ("rcMonitor", ctypes.wintypes.RECT),
+                                ("rcWork", ctypes.wintypes.RECT),
+                                ("dwFlags", ctypes.wintypes.DWORD),
+                                ("szDevice", ctypes.wintypes.WCHAR*CCHDEVICENAME)]
+                lpmi = MONITORINFOEX()
+                lpmi.cbSize = ctypes.sizeof(MONITORINFOEX)
+                user32.GetMonitorInfoW(hMonitor, ctypes.byref(lpmi))
+
+                # if this is the monitor we are looking for
+                if self.get_monitor_name(lpmi.szDevice) == name:
+
+                    x = lprcMonitor.contents.left
+                    y = lprcMonitor.contents.top
+
+                    # stop enumeration here
+                    return False
+                else:
+                    return True
+
+            MonitorEnumProc = ctypes.WINFUNCTYPE(
+                ctypes.c_bool,
+                ctypes.c_ulong,
+                ctypes.c_ulong,
+                ctypes.POINTER(ctypes.wintypes.RECT),
+                ctypes.c_int)
+
+            # enumerate all monitors and try to find the one with
+            # the specified name
+            callback = MonitorEnumProc(_MonitorEnumProcCallback)
+            if user32.EnumDisplayMonitors(0, 0, callback, 0) == 0:
+                raise WindowsError("Unable to enumerate monitors")
+
+
+
+        # TODO: Implement on Linux. Using 'xdotool', maybe?
+        # if on Linux
+        elif platform.system() == "Linux":
+
+            # use the 'xdotool' terminal command to obtain basic display infos
+            info = subprocess.check_output(['xdotool', '???'])
+
+
+        # return the obtained name
+        return (x, y)
 
 
 
@@ -347,11 +469,11 @@ class freeHoloPlayCoreAPI:
         for dev in hidapi.enumerate():
 
             # if this device belongs to the Looking Glass Factory
-            if dev['product_string'] == self.product_string and dev['manufacturer_string'] == self.manufacturer_string and dev['usage_page'] == 1:
+            if (dev['product_string'] == self.product_string and dev['manufacturer_string'] == self.manufacturer_string and dev['usage_page'] == 1):
                 pprint(dev)
 
                 # if the path could not be detected
-                if dev['path'] == '':
+                if len(dev['path']) == 0:
 
                     # TODO: We need a work around!
                     # NOTE: We might obtain that from ioreg's IOServiceLegacyMatchingRegistryID entry?
@@ -377,14 +499,14 @@ class freeHoloPlayCoreAPI:
                 cfg['subp'] = 1.0 / (3 * cfg['screenW'])
                 cfg['ri'], cfg['bi'] = (2,0) if cfg['flipSubp'] else (0,2)
 
-                # find hdmi name and device type
+                # find hdmi name, device type, and monitor position in
+                # virtual screen coordinates
                 cfg['hdmi'] = self.get_device_hdmi_name()
                 cfg['type'] = self.get_device_type(cfg['screenW'], cfg['screenH'])
+                cfg['x'], cfg['y'] = self.get_device_screen_position(cfg['hdmi'])
 
                 # TODO: HoloPlay Core SDK delivers these values as calibration data
                 #       but they are not in the JSON
-                cfg['x'] = 0
-                cfg['y'] = 0
                 cfg['fringe'] = 0.0
 
                 # close the device
