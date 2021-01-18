@@ -238,7 +238,48 @@ class freeHoloPlayCoreAPI:
         # if on Windows
         elif platform.system() == "Windows":
 
-            return 'LKG79PxDUMMY'
+            # The following is modified code part from:
+            # https://github.com/torarve/RunRes/blob/master/runres.py (MIT License)
+            # and mixed with https://stackoverflow.com/questions/4958683/how-do-i-get-the-actual-monitor-name-as-seen-in-the-resolution-dialog
+            # LICENSE: (MIT License)
+            from ctypes import wintypes
+
+            # load user32.dll, which contains all the functions to obtain
+            # display informations
+            user32 = ctypes.WinDLL('user32', use_last_error=True)
+
+            # Define the DISPLAY_DEVICE Structure
+            class DISPLAY_DEVICE(ctypes.Structure):
+            	_fields_ = [
+            		("cb", ctypes.wintypes.DWORD),
+            		("DeviceName", ctypes.wintypes.CHAR*32),
+            		("DeviceString", ctypes.wintypes.CHAR*128),
+            		("StateFlags", ctypes.wintypes.DWORD),
+            		("DeviceID", ctypes.wintypes.CHAR*128),
+            		("DeviceKey", ctypes.wintypes.CHAR*128)
+            	]
+
+            # make an instance of this structure and set its cbSize
+            display_device = DISPLAY_DEVICE()
+            display_device.cb = ctypes.sizeof(display_device)
+
+            # index and output variable
+            i = 0
+            returnName = b'LKG79PxDUMMY'
+
+            # iterate through all display devices
+            while user32.EnumDisplayDevicesA(None, i, ctypes.pointer(display_device),0):
+                i += 1
+
+                # we need to call that function again to get the Monitor name
+                user32.EnumDisplayDevicesA(display_device.DeviceName, 0, ctypes.pointer(display_device), 0)
+
+                # if it is a Looking Glass
+                if b'LKG' in display_device.DeviceString:
+                    returnName = display_device.DeviceString
+                    break
+
+            return returnName.decode('ascii')
 
         elif platform.system() == "Linux":
 
