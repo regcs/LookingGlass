@@ -1,15 +1,13 @@
 # ------------ FREE HOLOPLAY CORE REPLACEMENT ---------------
-import json
-import re
-import struct
-import subprocess
-import sys
+import sys, platform
+import json, binascii, struct
 import ctypes
+import subprocess
 from math import *
 from enum import Enum
+
+# for debugging only
 from pprint import pprint
-import sys
-import platform
 
 # Note: Use libhidapi-hidraw, i.e. hidapi with hidraw support,
 # or the joystick device will be gone when execution finishes.
@@ -213,7 +211,7 @@ class freeHoloPlayCoreAPI:
 
     # TODO: How do we differentiate between multiple connected LKGs?
     #       Might be rare case, but still should be implemented!
-    def get_device_hdmi_name(self):
+    def get_device_hdmi_name(self, cfg):
 
         # set default output
         returnName = b'LKG00PxDUMMY'
@@ -232,7 +230,7 @@ class freeHoloPlayCoreAPI:
             for display in info['SPDisplaysDataType'][0]['spdisplays_ndrvs']:
                 # until we find a Looking Glass
                 if 'LKG' == display['_name'][:3]:
-                    returnName = display['_name']
+                    returnName = display['_name'].encode()
                     break
 
         # if on Windows
@@ -279,13 +277,22 @@ class freeHoloPlayCoreAPI:
                     break
 
 
-        # TODO: Implement on Linux. Using 'xdotool', maybe?
         # if on Linux
         elif platform.system() == "Linux":
 
-            # use the 'xdotool' terminal command to obtain basic display infos
-            raise OSError('Not supported yet.')
-            #info = subprocess.check_output(['xdotool', '???'])
+            info = subprocess.check_output(['xrandr', '--prop'])
+            for width,height,x,y,edid in re.findall(rb"^\S+ connected(?: primary)? (?P<width>\d+)x(?P<height>\d+)(?P<x>[-+]\d+)(?P<y>[-+]\d+).*\n\s+EDID:\s*\n(?P<edid>(?:\s+[0-9a-f]+\n)+)", info, re.MULTILINE):
+                edid = binascii.a2b_hex(b''.join(edid.split()))
+                try:
+                    name = re.search(rb"\0\0\0\xfc\0([^\n]{,13})", edid)[1]
+                except TypeError:	# Found no name
+                    continue
+                if not (name.startswith(b'LKG') and int(width)==cfg['screenW'] and int(height)==cfg['screenH']):
+                    continue	# Wrong name or resolution
+                cfg['x'] = int(x)
+                cfg['y'] = int(y)
+                returnName = name
+                break
 
 
         # return the obtained name
@@ -359,9 +366,10 @@ class freeHoloPlayCoreAPI:
             for display in info['SPDisplaysDataType'][0]['spdisplays_ndrvs']:
                 # until we find a Looking Glass
                 if display['_name'] == name:
+
                     # TODO: Are there keys that return the position?
-                    x = int(display['_spdisplays_resolution'].split(" x ")[0])
-                    y = int(display['_spdisplays_resolution'].split(" x ")[1])
+                    x = int(display['_spdisplays_pixels'].split(" x ")[0])
+                    y = int(display['_spdisplays_pixels'].split(" x ")[1])
                     break
 
 
@@ -501,12 +509,15 @@ class freeHoloPlayCoreAPI:
 
                 # find hdmi name, device type, and monitor position in
                 # virtual screen coordinates
-                cfg['hdmi'] = self.get_device_hdmi_name()
+                cfg['hdmi'] = self.get_device_hdmi_name(cfg)
                 cfg['type'] = self.get_device_type(cfg['screenW'], cfg['screenH'])
-                cfg['x'], cfg['y'] = self.get_device_screen_position(cfg['hdmi'])
+                if 'x' not in cfg:
+                    cfg['x'], cfg['y'] = self.get_device_screen_position(cfg['hdmi'])
 
-                # TODO: HoloPlay Core SDK delivers these values as calibration data
-                #       but they are not in the JSON
+                # TODO: HoloPlay Core SDK delivers the fringe value,
+                #       but it is not in the JSON. LoneTechs assumed that it is
+                #       a border crop setting, to hide lit up pixels outside of the big block
+                # arbitrarily assign 0.0 to fringe
                 cfg['fringe'] = 0.0
 
                 # close the device
