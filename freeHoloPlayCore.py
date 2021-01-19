@@ -1,4 +1,40 @@
-# ------------ FREE HOLOPLAY CORE REPLACEMENT ---------------
+# ##### freehpc - Free HoloPlay Core SDK #####
+#
+# This free library replicates some of the functionality of the proprietary
+# HoloPlay Core SDK of the Looking Glass Factory. Its main purpose is to enable
+# work with the Looking Glass devices with GPL'ed software. We, the authors are
+# not associated with the Looking Glass Factory.
+#
+# Known limitations:
+# - requires libhid to be installed in your python environment
+# - may fail to connect to Looking Glass under special circumstances on macOS
+# - currently does not support Looking Glass Portrait
+#
+# ############### MIT LICENSE ################
+#
+# Copyright © 2020 Yann Vernier, Christian Stolze
+# All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+# ###########################################
+
 import sys, platform
 import json, binascii, struct
 import ctypes
@@ -493,7 +529,7 @@ class freeHoloPlayCoreAPI:
                     # NOTE: Path is sometimes empty on macOS, because hidapi.enumerate is unable to provide the path
                     #       on macOS. Might be related to too long paths (https://github.com/flirc/hidapi/commit/8d251c3854c3b1877509ab07a623dafc8e803db5)
                     #       that occur for certain USB Hubs.
-                    dev['path'] = b"id:4294971243"
+                    dev['path'] = b"ENTER ADAPTER PATH MANUALLY HERE"
 
 
                 # create a dictionary with an index for this device
@@ -613,7 +649,7 @@ class freeHoloPlayCoreAPI:
 
 
 
-
+# ################ Test Code ##################
 
 if __name__ == '__main__':
 
